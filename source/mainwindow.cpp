@@ -6,7 +6,7 @@
 //
 //  ------------------------------------------------------------------------
 //
-//  Edited for Qt6 compatibility
+//  Edited for Qt6 compatibility, added recording timer, dark mode support
 //
 //  ------------------------------------------------------------------------
 //
@@ -314,6 +314,17 @@ void MainWindow::scanPorts()
 // UI.
 void MainWindow::createLayout()
 {
+    #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    // Check for dark theme on creation
+    if (this->palette().text().color().name() == QColor(Qt::white).name()) {
+        isDarkMode = true;
+    } else {
+        isDarkMode = false;
+    }
+    #else
+    isDarkMode = false;
+    #endif
+
     int i;
 
     setWindowIcon(QIcon(":/images/Intan_Icon_32p_trans24.png"));
@@ -480,8 +491,13 @@ void MainWindow::createLayout()
             this, SLOT(changeSampleRate(int)));
     connect(notchFilterComboBox, SIGNAL(currentIndexChanged(int)),
             this, SLOT(changeNotchFilter(int)));
+    #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
     connect(displayButtonGroup, SIGNAL(buttonClicked(int)),
             this, SLOT(changePort(int)));
+    #else
+    connect(displayButtonGroup, SIGNAL(idClicked(int)),
+            this, SLOT(changePort(int)));
+    #endif
 
     dacGainSlider = new QSlider(Qt::Horizontal);
     dacNoiseSuppressSlider = new QSlider(Qt::Horizontal);
@@ -505,7 +521,11 @@ void MainWindow::createLayout()
     fifoLagLabel->setStyleSheet("color: green");
 
     fifoFullLabel = new QLabel(tr("(0% full)"));
-    fifoFullLabel->setStyleSheet("color: black");
+    if (!isDarkMode) {
+        fifoFullLabel->setStyleSheet("color: black");
+    } else {
+        fifoFullLabel->setStyleSheet("color: white");
+    }
 
     QHBoxLayout *runStopLayout = new QHBoxLayout;
     runStopLayout->addWidget(runButton);
@@ -515,11 +535,24 @@ void MainWindow::createLayout()
     runStopLayout->addWidget(fifoLagLabel);
     runStopLayout->addWidget(fifoFullLabel);
 
+    timeLabel = new QLabel(tr("00:00:00"));
+    if (!isDarkMode) {
+        timeLabel->setStyleSheet("color: black");
+    } else {
+        timeLabel->setStyleSheet("color: white");
+    }
+    timeLabel->setFixedWidth(timeLabel->sizeHint().width());
+
+    displayTimer = new QTimer(this);
+    displayTimer->setInterval(1000);
+    connect(displayTimer, SIGNAL(timeout()), this, SLOT(updateTimeLabel()));
+
     QHBoxLayout *recordLayout = new QHBoxLayout;
     recordLayout->addWidget(recordButton);
     recordLayout->addWidget(triggerButton);
     recordLayout->addWidget(setSaveFormatButton);
     recordLayout->addStretch(1);
+    recordLayout->addWidget(timeLabel);
 
     saveFilenameLineEdit = new QLineEdit();
     saveFilenameLineEdit->setEnabled(false);
@@ -660,8 +693,13 @@ void MainWindow::createLayout()
             this, SLOT(dacEnable(bool)));
     connect(dacSetButton, SIGNAL(clicked()),
             this, SLOT(dacSetChannel()));
+    #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
     connect(dacButtonGroup, SIGNAL(buttonClicked(int)),
             this, SLOT(dacSelected(int)));
+    #else
+    connect(dacButtonGroup, SIGNAL(idClicked(int)),
+            this, SLOT(dacSelected(int)));
+    #endif
 
     QHBoxLayout *dacControlLayout = new QHBoxLayout;
     dacControlLayout->addWidget(dacEnableCheckBox);
@@ -2543,6 +2581,10 @@ void MainWindow::writeSaveFileHeader(QDataStream &outStream, QDataStream &infoSt
 // waveform data over USB port.
 void MainWindow::runInterfaceBoard()
 {
+    timeLabel->setText(tr("00:00:00"));
+    timeLabel->setStyleSheet("color: green");
+    displayTimer->start();
+
     bool newDataReady;
     int triggerIndex;
     #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
@@ -2697,7 +2739,11 @@ void MainWindow::runInterfaceBoard()
                 if (fifoPercentageFull > 75.0) {
                     fifoFullLabel->setStyleSheet("color: red");
                 } else {
-                    fifoFullLabel->setStyleSheet("color: black");
+                    if (!isDarkMode) {
+                        fifoFullLabel->setStyleSheet("color: black");
+                    } else {
+                        fifoFullLabel->setStyleSheet("color: white");
+                    }
                 }
                 // Read waveform data from USB interface board.
                 totalBytesWritten +=
@@ -2926,6 +2972,13 @@ void MainWindow::runInterfaceBoard()
 // Stop SPI data acquisition.
 void MainWindow::stopInterfaceBoard()
 {
+    displayTimer->stop();
+    if (!isDarkMode) {
+        timeLabel->setStyleSheet("color: black");
+    } else {
+        timeLabel->setStyleSheet("color: white");
+    }
+
     running = false;
     wavePlot->setFocus();
 }
@@ -4211,6 +4264,12 @@ void MainWindow::setDacThreshold8(int threshold)
 {
     int threshLevel = qRound((double) threshold / 0.195) + 32768;
     if (!synthMode) evalBoard->setDacThreshold(7, threshLevel, threshold >= 0);
+}
+
+void MainWindow::updateTimeLabel()
+{
+    QTime time = QTime::fromString(timeLabel->text(), "hh:mm:ss");
+    timeLabel->setText(time.addSecs(1).toString("hh:mm:ss"));
 }
 
 int MainWindow::getEvalBoardMode()
