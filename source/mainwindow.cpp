@@ -1842,7 +1842,7 @@ void MainWindow::openInterfaceBoard()
 
     // Load Rhythm FPGA configuration bitfile (provided by Intan Technologies).
     string bitfilename =
-            QString(QCoreApplication::applicationDirPath() + "/main.bit").toStdString();
+            (QString(std::getenv("APPDIR"))+"/main.bit").toStdString();
 
     if (!evalBoard->uploadFpgaBitfile(bitfilename)) {
         QMessageBox::critical(this, tr("FPGA Configuration File Upload Error"),
