@@ -4,3 +4,5 @@
 source/RHD2000interface.pro.user
 
 *.autosave
+.idea
+*.AppImage
